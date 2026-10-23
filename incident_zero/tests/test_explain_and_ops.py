@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from incident_zero.agents.context import Context
 from incident_zero.agents.sentinel import evaluate, op_signals
-from incident_zero.explain import band, explain, to_markdown
+from incident_zero.agents.facts import Fact
+from incident_zero.explain import anomalous, band, explain, to_markdown
 from incident_zero.llm import LLM
 
 from . import fakes
@@ -94,3 +95,12 @@ def test_explanation_warns_when_model_confidence_outruns_the_evidence(settings, 
     x = explain(inc, store.evidence(inc_id), d)
     assert x["band"] == "low"
     assert any("well above the evidence score" in w for w in x["warnings"])
+
+
+def test_only_abnormal_state_corroborates():
+    ok = {"state": "running", "exit_code": "0", "oom": False, "restarts": 0, "networks": "demo"}
+    assert not anomalous(Fact("container", "cart", "E3", "cart: state=running", ok))
+    assert anomalous(Fact("container", "cart", "E3", "cart: state=exited", {**ok, "state": "exited"}))
+    assert not anomalous(Fact("resources", "ad", "E4", "", {"cpu": 5.0, "throttled": 0, "memory_percent": 30.0}))
+    assert anomalous(Fact("resources", "ad", "E4", "", {"cpu": 97.0, "throttled": 0, "memory_percent": 30.0}))
+    assert anomalous(Fact("datastore", "valkey-cart", "E7", "", {"stale_s": None}))

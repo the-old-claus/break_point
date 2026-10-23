@@ -65,7 +65,7 @@ Decide in the Control Room (`/`, `/approvals`, `/incidents/<id>/plan`) or with
 Before a plan is shown, `explain.py` scores the diagnosis in code, with no model involved:
 
 - **Checklist:** traces show the failure originates in the component (0.30), an alert fired on it (0.20), its own
-  logs show errors (0.20), metrics or container state corroborate it (0.20), only one root cause survived (0.10).
+  logs show errors (0.20), metrics or container state show it is abnormal (0.20; a healthy container does not count), only one root cause survived (0.10).
   The passed weights sum to the evidence score; 0.70+ is high, 0.40–0.69 medium, below that low.
 - **Most important evidence:** every evidence item is ranked by trace link, signal strength, service match and
   whether it was cited, so the approver sees which evidence matters without extra model calls.

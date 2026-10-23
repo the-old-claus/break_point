@@ -226,7 +226,7 @@ rule-based Diagnostician turns it into an `application_error` finding on that se
 
 **Explainability (`explain.py`).** Computed in code from the evidence ledger, never by the model:
 a five-item checklist (trace origin 0.30, alert on the component 0.20, the component's logs 0.20, metrics or
-container state 0.20, a single surviving root cause 0.10) summed into an evidence score and band; every evidence
+container state showing it abnormal 0.20 (a healthy container or quiet metrics do not count), a single surviving root cause 0.10) summed into an evidence score and band; every evidence
 item ranked by trace link, signal strength, service match and citation; warnings when the model's confidence exceeds
 the evidence score by more than 0.30 or the decisive cited evidence ranks outside the top three; and the evidence
 sources never collected. The orchestrator computes it at the start of planning; it is stored on the incident, sent

@@ -24,7 +24,7 @@ CHECKS: list[tuple[str, float, str]] = [
     ("traces", 0.30, "traces show the failure originates in the component"),
     ("alert", 0.20, "an alert fired on the component itself"),
     ("logs", 0.20, "the component's own logs show errors"),
-    ("state", 0.20, "metrics or container state corroborate it"),
+    ("state", 0.20, "metrics or container state show it is abnormal"),
     ("single", 0.10, "only one root cause survived"),
 ]
 HIGH, MEDIUM = 0.70, 0.40
@@ -41,6 +41,27 @@ def _first(facts: list[Fact], component: str, kinds: tuple[str, ...]) -> Optiona
     return next((x for x in facts if x.service == component and x.kind in kinds), None)
 
 
+def _num(v: Any) -> float:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def anomalous(x: Fact) -> bool:
+    """A state fact that shows something wrong (a healthy container or quiet metrics corroborate nothing)."""
+    v = x.values
+    if x.kind == "container":
+        return v.get("state") != "running" or bool(v.get("oom")) or bool(v.get("restarts")) or v.get("networks") == "none"
+    if x.kind == "resources":
+        return _num(v.get("throttled")) > 0 or _num(v.get("cpu")) >= 85 or _num(v.get("memory_percent")) >= 85
+    if x.kind == "gap":
+        return _num(v.get("gap_ms")) >= 200
+    if x.kind == "overview":
+        return "high error ratio" in str(v.get("notes", ""))
+    return x.kind in ("datastore", "outbound")
+
+
 def checklist(inc: Incident, diagnosis: Diagnosis, facts: list[Fact]) -> list[dict[str, Any]]:
     rc = diagnosis.root_causes[0] if diagnosis.root_causes else None
     comp = rc.component if rc else ""
@@ -48,7 +69,7 @@ def checklist(inc: Incident, diagnosis: Diagnosis, facts: list[Fact]) -> list[di
         "traces": _first(facts, comp, ("origin",)),
         "alert": _first(facts, comp, ("alert",)),
         "logs": _first(facts, comp, ("log",)),
-        "state": _first(facts, comp, STATE_KINDS),
+        "state": next((x for x in facts if x.service == comp and x.kind in STATE_KINDS and anomalous(x)), None),
     }
     alert_on_comp = any(a.service == comp for a in inc.alerts)
     out = []
