@@ -45,10 +45,22 @@ class ApprovalGate:
         self._event(inc.id).clear()
         self.ctx.store.save(inc)
         acts = "; ".join(f"{a.action} {a.parameters}" for a in inc.plan.actions)
+        x = inc.explanation or {}
         self.ctx.bus.publish("approval", "approval", f"approval needed for {inc.id}: {acts}", incident_id=inc.id,
-                             detail={"change_hash": inc.plan.change_hash, "expires_at": inc.approval.expires_at})
+                             detail={"change_hash": inc.plan.change_hash, "expires_at": inc.approval.expires_at,
+                                     "evidence_score": x.get("score"), "band": x.get("band"),
+                                     "warnings": x.get("warnings", [])})
         diag = inc.diagnosis.summary if inc.diagnosis else ""
-        body = (f"Incident {inc.id}: {inc.title}\n\nDiagnosis: {diag}\n\nProposed: {acts}\n\n"
+        why = ""
+        if x.get("component"):
+            checks = "\n".join(f"  [{'x' if c['passed'] else ' '}] {c['meaning']}"
+                               + (f" ({c['evidence_id']})" if c.get("evidence_id") else "") for c in x["checklist"])
+            top = ", ".join(f"{r['evidence_id']} ({r['score']:.2f})" for r in x.get("ranking", [])[:3])
+            why = (f"Evidence score: {x['score']:.2f} ({x['band']}), computed in code; model confidence "
+                   f"{x.get('model_confidence', 0):.2f}\n{checks}\nMost important evidence: {top}\n"
+                   + (f"Not checked: {', '.join(x['not_checked'])}\n" if x.get("not_checked") else "")
+                   + "".join(f"WARNING: {w}\n" for w in x.get("warnings", [])) + "\n")
+        body = (f"Incident {inc.id}: {inc.title}\n\nDiagnosis: {diag}\n\n{why}Proposed: {acts}\n\n"
                 f"Approve or reject in the Control Room: http://{self.ctx.settings.host}:{self.ctx.settings.port}"
                 f"/incidents/{inc.id}/plan\nNothing changes without your approval. Expires {inc.approval.expires_at}.")
         result = notify.send(self.ctx.settings, f"[Incident Zero] approval needed: {inc.id} {inc.title}", body)

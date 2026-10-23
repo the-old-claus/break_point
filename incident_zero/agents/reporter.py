@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 
+from ..explain import explain, to_markdown as explain_markdown
 from ..models import Event, Evidence, Incident
 from ..report_schema import validate
 from .context import Context
@@ -181,7 +182,13 @@ class Reporter:
                     inc.report_summary = data["summary"][:800]
             report = build_report(inc, self.ctx.store.evidence(inc.id), self.ctx.store.events(incident_id=inc.id),
                                   self.ctx.settings.report_schema_file)
-            self.ctx.store.write_report(inc.id, report, to_markdown(report, inc.title))
+            evidence = self.ctx.store.evidence(inc.id)
+            if inc.diagnosis and not inc.explanation:
+                inc.explanation = explain(inc, evidence, inc.diagnosis)
+            md = to_markdown(report, inc.title)
+            if inc.explanation:
+                md += "\n" + explain_markdown(inc.explanation)
+            self.ctx.store.write_report(inc.id, report, md)
         self.ctx.bus.publish("reporter", "report", f"report written for {inc.id} ({report['status']})",
                              incident_id=inc.id)
         return report

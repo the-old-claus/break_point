@@ -49,7 +49,8 @@ was already off.
 ## Known gaps (not fixed yet)
 
 1. **Per-operation alerting**: an operation-level error rule (e.g. `EmptyCart` failing heavily while cart overall
-   is fine) is needed for fault 2.
+   is fine) is needed for fault 2. *Implemented (CP10: `op_error_rate`, thresholds `op_error_ratio` 0.2 and
+   `op_min_errors` 3); not yet re-run live.*
 2. **Fault 3 needs traffic for the failing product** during its test (and a check that errors appear before the
    run counts).
 3. **The Judge is too lenient**: it should check the exact flag/parameters acted on and that the injected signal

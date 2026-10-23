@@ -40,8 +40,8 @@ Category = Literal[
 
 class Alert(BaseModel):
     id: str                                   # A1, A2 ... within the incident
-    rule: Literal["error_rate", "latency_p95", "container_down", "container_restarts", "traffic_spike",
-                  "telemetry_silent", "entry_unhealthy"]
+    rule: Literal["error_rate", "op_error_rate", "latency_p95", "container_down", "container_restarts",
+                  "traffic_spike", "telemetry_silent", "entry_unhealthy"]
     service: str
     signal: str                               # human description of what was measured
     value: Optional[float] = None
@@ -180,6 +180,7 @@ class Incident(BaseModel):
     escalation_reason: str = ""
     report_summary: str = ""
     llm: str = ""                             # which model ran, or why none did
+    explanation: dict = {}                    # explain.explain(): evidence score, checklist, ranked evidence, warnings
 
     @property
     def terminal(self) -> bool:

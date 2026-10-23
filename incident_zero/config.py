@@ -34,6 +34,9 @@ class Thresholds:
     silence_after_s: float = 180.0   # a service that sent spans at baseline and none for this long
     silent_min_rps: float = 0.5      # only services this busy at baseline count as "gone silent" (queue consumers
                                      # like fraud-detection idle naturally when upstream traffic stops)
+    op_error_ratio: float = 0.2      # one operation's share of failing server spans (catches a fault on a single
+                                     # operation that is diluted below error_ratio at service level, e.g. EmptyCart)
+    op_min_errors: float = 3.0       # and at least this many failing spans of that operation in the window
 
 
 @dataclass

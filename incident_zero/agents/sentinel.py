@@ -3,6 +3,8 @@
 Every `sentinel_interval_s` it evaluates the alert rules on Prometheus span metrics and Docker state:
 
   error_rate          a service's share of failing server spans above the threshold (and not chronic at baseline)
+  op_error_rate       one operation's share of failing server spans above `op_error_ratio`, with at least
+                      `op_min_errors` failures in the window, when the service as a whole is under `error_ratio`
   latency_p95         p95 above max(floor, factor x baseline)
   traffic_spike       an entry service's request rate above factor x baseline
   telemetry_silent    a service that served traffic at baseline and now reports none
@@ -28,7 +30,7 @@ from ..telemetry.backends import BackendError
 from .context import Context
 
 EARLY_PHASES = ("detected", "investigating", "diagnosing", "auditing", "planning")
-RULE_LABEL = {"error_rate": "Error rate", "latency_p95": "Latency", "traffic_spike": "Traffic spike",
+RULE_LABEL = {"error_rate": "Error rate", "op_error_rate": "Operation errors", "latency_p95": "Latency", "traffic_spike": "Traffic spike",
               "telemetry_silent": "Telemetry silent", "container_down": "Container down",
               "container_restarts": "Container restarting", "entry_unhealthy": "Entry unhealthy"}
 
@@ -56,6 +58,53 @@ def red(ctx: Context, window: str, offset: float = 0) -> dict[str, dict]:
     lat = p.vector(Q.p95(window, offset_s=offset), "service_name")
     return {s: {"rps": rps.get(s, 0.0), "error_ratio": (err.get(s, 0.0) / rps[s]) if rps.get(s) else 0.0,
                 "p95": lat.get(s)} for s in set(rps) | set(lat)}
+
+
+def red_ops(ctx: Context, window: str, offset: float = 0) -> dict[tuple[str, str], dict]:
+    """{(service, operation): {"rps", "error_rps"}} from server and consumer span metrics."""
+    p = ctx.telemetry.prom
+
+    def by_op(promql: str) -> dict[tuple[str, str], float]:
+        out: dict[tuple[str, str], float] = {}
+        for item in p.query(promql):
+            m = item.get("metric", {})
+            try:
+                v = float(item["value"][1])
+            except (KeyError, ValueError, IndexError, TypeError):
+                continue
+            if m.get("service_name") and m.get("span_name") and v == v:
+                out[(m["service_name"], m["span_name"])] = v
+        return out
+
+    rps, err = by_op(Q.op_rps(window, offset_s=offset)), by_op(Q.op_error_rps(window, offset_s=offset))
+    return {k: {"rps": rps.get(k, 0.0), "error_rps": err.get(k, 0.0)} for k in set(rps) | set(err)}
+
+
+def op_signals(ctx: Context, window: str, service_firing: set[str]) -> list[Signal]:
+    """Operation-level errors that a service-level ratio dilutes (one signal per service: its worst operation)."""
+    s, th = ctx.settings, ctx.settings.thresholds
+    try:
+        now = red_ops(ctx, window)
+        base = red_ops(ctx, window, s.baseline_s)
+    except (BackendError, AttributeError):
+        return []
+    win_s = Q.window_seconds(window)
+    worst: dict[str, Signal] = {}
+    for (svc, op), n in sorted(now.items()):
+        if svc in s.ignore_services or svc in service_firing or not n["rps"]:
+            continue
+        ratio = n["error_rps"] / n["rps"]
+        errors = n["error_rps"] * win_s
+        b = base.get((svc, op), {})
+        b_ratio = (b.get("error_rps", 0.0) / b["rps"]) if b.get("rps") else 0.0
+        if ratio < th.op_error_ratio or errors < th.op_min_errors or b_ratio >= th.op_error_ratio:
+            continue
+        sig = Signal("op_error_rate", svc, f"{svc} operation={op} error_ratio={ratio:.3f} errors={errors:.0f} "
+                     f"over {window} (threshold {th.op_error_ratio:.3f}, baseline {b_ratio:.3f})",
+                     ratio, th.op_error_ratio, b_ratio, "ratio", Q.op_error_rps(window, svc))
+        if svc not in worst or (worst[svc].value or 0) < ratio:
+            worst[svc] = sig
+    return list(worst.values())
 
 
 def evaluate(ctx: Context, learned: Optional[dict[str, dict]] = None, window: Optional[str] = None,
@@ -93,6 +142,7 @@ def evaluate(ctx: Context, learned: Optional[dict[str, dict]] = None, window: Op
         if b.get("rps", 0) >= th.silent_min_rps and n["rps"] == 0:
             signals.append(Signal("telemetry_silent", svc, f"{svc} rps=0 over {window} (baseline {b['rps']:.2f})",
                                   0.0, None, b["rps"], "req/s", Q.rps(window, svc)))
+    signals += op_signals(ctx, window, {sg.service for sg in signals if sg.rule == "error_rate"})
     try:
         containers = ctx.telemetry.docker.containers()
     except Exception:

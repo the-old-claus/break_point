@@ -209,3 +209,28 @@ the Action API's allowed actions, and `runbook.yaml` (service → flags guarding
 demo's source). The model (or a rule table) picks; code validates; the API previews; a human approves. Fixes are
 operational (restart, flag off, throttle), never code patches. Picking a flag by name is what went wrong in fault
 3; a `code_search` tool over the demo source is the proposed next step.
+
+
+---
+
+## CP10 — Architecture-plan gaps (per-operation alerting, explainability in code)
+
+Built with an AI coding assistant (Claude); declared in the team form.
+
+**Per-operation alerting (`op_error_rate`).** `cartFailure` fails only `EmptyCart`, about 3 % of cart's traffic, so
+the service-level `error_rate` rule never fired. The Sentinel now also queries span metrics by
+`(service_name, span_name)` and raises `op_error_rate` when one operation's error ratio is at least
+`op_error_ratio` (0.2) with at least `op_min_errors` (3) failures in the window, the same operation was healthy at
+baseline, and the service-level rule has not already fired. One signal per service (its worst operation). The
+rule-based Diagnostician turns it into an `application_error` finding on that service, quoting `operation=<name>`.
+
+**Explainability (`explain.py`).** Computed in code from the evidence ledger, never by the model:
+a five-item checklist (trace origin 0.30, alert on the component 0.20, the component's logs 0.20, metrics or
+container state 0.20, a single surviving root cause 0.10) summed into an evidence score and band; every evidence
+item ranked by trace link, signal strength, service match and citation; warnings when the model's confidence exceeds
+the evidence score by more than 0.30 or the decisive cited evidence ranks outside the top three; and the evidence
+sources never collected. The orchestrator computes it at the start of planning; it is stored on the incident, sent
+with the approval request and event, and appended to the Markdown report as "Why this diagnosis". It is advisory: it
+does not change the lifecycle, so the existing approval and escalation paths are untouched.
+
+Tests: `test_explain_and_ops.py` (4). Suite: 74 passed.

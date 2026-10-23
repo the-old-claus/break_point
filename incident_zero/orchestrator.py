@@ -25,6 +25,7 @@ from typing import Optional
 from .agents.approval import ApprovalGate
 from .agents.auditor import Auditor
 from .agents.context import Context
+from .explain import explain
 from .agents.diagnostician import Diagnostician, drop_unsupported, rule_diagnosis
 from .agents.executor import Executor
 from .agents.investigator import Investigator
@@ -193,6 +194,12 @@ class Orchestrator:
 
         if p == "planning":
             assert inc.diagnosis is not None
+            evidence = ctx.store.evidence(inc.id)
+            inc.explanation = explain(inc, evidence, inc.diagnosis)
+            ctx.bus.publish("auditor", "step", f"evidence score {inc.explanation['score']:.2f} "
+                            f"({inc.explanation['band']}) for {inc.explanation['component']}"
+                            + ("; " + "; ".join(inc.explanation["warnings"]) if inc.explanation["warnings"] else ""),
+                            incident_id=inc.id)
             plan = self.planner.run(inc, inc.diagnosis, ctx.store.evidence(inc.id))
             inc.plan = plan
             if not plan.actions:

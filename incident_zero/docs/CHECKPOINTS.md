@@ -15,5 +15,6 @@ evidence (test command, output) are recorded here and in BUILD_LOG.md.
 | CP7 | Practice: Simulator scenarios (flags, infra, combinations), hidden ground truth, Judge | P1–P4, R3 | Practice tests; ground truth unreadable from the tool layer | done (Judge too lenient: see LIVE_RESULTS) |
 | CP8 | Live run on the OTel demo: practice incidents end to end | all | At least one application fault and one infrastructure fault detected, diagnosed with audited evidence, approved, executed (dry run and live), verified, reported | **partial**: brief faults 1–3 run live (stopped there on request): 1 pass, 2 missed, 3 invalid test; infrastructure faults not yet run. See LIVE_RESULTS.md |
 | CP9 | Commit, push, draft PR, final BUILD_LOG update | — | Branch pushed, PR open, docs current | done |
+| CP10 | Architecture-plan gaps: per-operation error alerting (LIVE_RESULTS gap 1); explainability computed in code (checklist, evidence score, ranked evidence, warnings) shown in the approval request and report | F1, F5, C-approval | `pytest incident_zero/tests/test_explain_and_ops.py`: a fault on one operation diluted below the service threshold is caught; too few or chronic errors are not; the explanation is deterministic, cites only real evidence, and warns when model confidence outruns the evidence | done (4 tests; not yet re-run live) |
 
-Test count: 70 unit/integration tests (`pytest incident_zero/tests`).
+Test count: 74 unit/integration tests (`pytest incident_zero/tests`).

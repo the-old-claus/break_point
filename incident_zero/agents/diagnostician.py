@@ -125,6 +125,10 @@ def rule_diagnosis(inc: Incident, evidence: list[Evidence], topo: Topology,
         elif x.kind == "datastore":
             f(s, "dependency_failure", f"{s} is unreachable: its metrics receiver has no fresh samples").add(
                 4, x, f"{s} metrics are stale or absent", x.line)
+        elif x.kind == "alert" and v["rule"] == "op_error_rate":
+            op = re.search(r"operation=(\S+)", x.line)
+            f(s, "application_error", f"{s} fails its {op.group(1) if op else 'one'} operation").add(
+                3, x, f"one operation of {s} fails while the service total looks healthy", _field(x.line, "operation"))
         elif x.kind == "alert" and v["rule"] == "traffic_spike":
             f(s, "traffic", f"a traffic flood hit {s}").add(5, x, "request rate far above baseline")
         elif x.kind == "overview" and "high error ratio" in v["notes"]:
@@ -173,7 +177,7 @@ def _field(line: str, name: str) -> str:
 
 
 def v_rule_ok(x: Fact) -> bool:
-    return x.values.get("rule") in ("error_rate", "latency_p95", "traffic_spike", "telemetry_silent",
+    return x.values.get("rule") in ("error_rate", "op_error_rate", "latency_p95", "traffic_spike", "telemetry_silent",
                                     "container_down", "container_restarts")
 
 

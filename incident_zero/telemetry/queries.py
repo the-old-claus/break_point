@@ -32,6 +32,24 @@ def error_rps(window: str, service: str | None = None, offset_s: float = 0, by: 
     return f"sum by ({by}) (rate({CALLS}{_sel(INBOUND, ERROR, _svc(service))}[{window}]{_off(offset_s)}))"
 
 
+def op_rps(window: str, service: str | None = None, offset_s: float = 0) -> str:
+    """Request rate per (service, operation): a fault on one operation can hide inside a busy service's total."""
+    return rps(window, service, offset_s, by="service_name, span_name")
+
+
+def op_error_rps(window: str, service: str | None = None, offset_s: float = 0) -> str:
+    return error_rps(window, service, offset_s, by="service_name, span_name")
+
+
+def window_seconds(window: str) -> float:
+    """'2m' -> 120.0; '30s' -> 30.0; '1h' -> 3600.0 (PromQL range syntax, single unit)."""
+    units = {"s": 1, "m": 60, "h": 3600}
+    try:
+        return float(window[:-1]) * units[window[-1]]
+    except (KeyError, ValueError, IndexError):
+        return 120.0
+
+
 def p95(window: str, service: str | None = None, offset_s: float = 0, by: str = "service_name") -> str:
     return (f"histogram_quantile(0.95, sum by ({by}, le) "
             f"(rate({DURATION}{_sel(INBOUND, _svc(service))}[{window}]{_off(offset_s)})))")

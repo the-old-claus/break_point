@@ -42,10 +42,10 @@ Practice (not in eval mode): `/practice` in the Control Room, or `incident_zero 
 
 | # | Agent | Model | Job |
 |---|---|---|---|
-| 1 | Sentinel | no | Alert rules on error rate, p95 latency, traffic, silence, container state; correlates alerts into one incident |
+| 1 | Sentinel | no | Alert rules on error rate (per service and per operation), p95 latency, traffic, silence, container state; correlates alerts into one incident |
 | 2 | Investigator | yes (LangGraph tool loop; playbook fallback) | Picks the next telemetry tool from findings so far; every result becomes evidence `E<n>` |
 | 3 | Diagnostician | yes (rules fallback) | Component, root cause, confidence, claims that quote evidence |
-| 4 | Evidence Auditor | no | Cited ids exist, quotes are verbatim, every alert explained; else back to the Investigator |
+| 4 | Evidence Auditor | no | Cited ids exist, quotes are verbatim, every alert explained; else back to the Investigator. Then scores the diagnosis in code: a checklist of independent signals, ranked evidence and warnings (`explain.py`) |
 | 5 | Remediation Planner | choice only | Allowed actions only, validated by code, previewed as a dry run, hashed |
 | 6 | Approval Gate | human | Approve / reject / send back; timeout escalates |
 | 7 | Executor | no | Action API only; kill switch checked before every call |
@@ -59,6 +59,21 @@ approver's name and that hash: a plan that changed after it was displayed cannot
 which goes to the Investigator. No decision before `approval_timeout_s` escalates the incident and nothing runs.
 Decide in the Control Room (`/`, `/approvals`, `/incidents/<id>/plan`) or with
 `incident_zero decide INC-0001 approve --as <name>`.
+
+## How the approver sees why
+
+Before a plan is shown, `explain.py` scores the diagnosis in code, with no model involved:
+
+- **Checklist:** traces show the failure originates in the component (0.30), an alert fired on it (0.20), its own
+  logs show errors (0.20), metrics or container state corroborate it (0.20), only one root cause survived (0.10).
+  The passed weights sum to the evidence score; 0.70+ is high, 0.40–0.69 medium, below that low.
+- **Most important evidence:** every evidence item is ranked by trace link, signal strength, service match and
+  whether it was cited, so the approver sees which evidence matters without extra model calls.
+- **Warnings:** a model confidence more than 0.30 above the evidence score, or decisive cited evidence the data
+  ranks low; plus the evidence kinds that were never collected (`not_checked`).
+
+It appears in the approval request, in the `approval` event, on the incident (`explanation`) and as a
+"Why this diagnosis" section in the Markdown report.
 
 ## How the kill switch works
 
