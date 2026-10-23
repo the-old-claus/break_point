@@ -75,6 +75,8 @@ def test_explanation_checklist_ranking_and_report(settings, store, bus):
     assert x["score"] == round(sum(c["weight"] for c in x["checklist"] if c["passed"]), 2)
     assert x["band"] == band(x["score"])
     assert x["ranking"] and x["ranking"][0]["trace_link"] == 1.0          # the trace origin ranks first
+    healthy = [r for r in x["ranking"] if r["tool"] == "container_status"]
+    assert all(r["strength"] < 1.0 for r in healthy)                       # a healthy container is not strong
     ev_ids = {e.id for e in store.evidence(inc_id)}
     assert {r["evidence_id"] for r in x["ranking"]} <= ev_ids               # nothing invented
     md = to_markdown(x)

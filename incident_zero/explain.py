@@ -28,7 +28,6 @@ CHECKS: list[tuple[str, float, str]] = [
     ("single", 0.10, "only one root cause survived"),
 ]
 HIGH, MEDIUM = 0.70, 0.40
-STRONG_KINDS = ("origin", "alert", "container", "datastore", "gap", "resources")
 STATE_KINDS = ("overview", "resources", "container", "datastore", "gap", "outbound")
 EXPECTED_SOURCES = {"jaeger": "traces", "logs": "logs", "prometheus": "metrics", "docker": "container state"}
 
@@ -94,7 +93,8 @@ def rank_evidence(evidence: list[Evidence], facts: list[Fact], component: str,
         fs = by_ev.get(e.id, [])
         mine = [x for x in fs if x.service == component]
         trace = 1.0 if any(x.kind == "origin" for x in mine) else 0.0
-        strength = 1.0 if any(x.kind in STRONG_KINDS for x in mine) else 0.6 if any(
+        strength = 1.0 if any(x.kind in ("origin", "alert") or (x.kind in STATE_KINDS and anomalous(x))
+                              for x in mine) else 0.6 if any(
             x.kind == "log" for x in mine) else 0.5 if mine else 0.0
         svc = 1.0 if mine or e.args.get("service") == component else 0.0
         cite = 1.0 if e.id in cited else 0.0
